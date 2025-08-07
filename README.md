@@ -591,7 +591,307 @@ This would deny traffic from 203.0.113.45 but allow everything else.
 
 For our lab, let's remove any restrictions so that the app is fully accessible for any final tests or use.
 
-## 9. Cleanup Resources (Optional)
+## 9. Data Persistence in Azure Container Apps
+
+In previous steps, we focused on deploying and managing stateless containers. By default, any data written inside an Azure Container Apps container is *ephemeral* – it disappears when the container or its hosting replica is stopped or restarted. Many real-world applications, however, need to **persist data** beyond a single container’s lifetime (for example, user uploads, processed files, or application state). Azure Container Apps (ACA) supports multiple storage options to accommodate this need.
+
+**Azure Container Apps provides three storage options**, each with different scope and persistence characteristics:
+
+| **Storage Type**            | **Description**                                                     | **Persistence**                                      | **Example Use Case**                                                   |
+|-----------------------------|---------------------------------------------------------------------|------------------------------------------------------|-----------------------------------------------------------------------|
+| **Container file system**   | Ephemeral storage local to each **individual container**. Only that container can access it.  | Data persists only until the **container** shuts down or restarts. | Writing a local cache or temporary files within a single container (e.g. in-memory processing results). |
+| **Replica temporary storage (EmptyDir)** | Ephemeral storage shared by **all containers in the same replica** (similar to Kubernetes *EmptyDir*). | Data persists for the lifetime of the **replica** (survives container restarts on that replica). **Lost when the replica is replaced or scaled to zero**. | Sharing files between containers in a replica – e.g. the main app container writes log files that a sidecar container reads and ships off. |
+| **Azure Files**             | **Durable storage** backed by an **Azure Files** share (external storage account). All replicas can mount it. | Data is persisted to a remote Azure file share, surviving app restarts, revisions, and scaling (accessible across replicas). | Storing user uploads or application data that must be retained and accessible outside the app (e.g. shared reports folder). |
+
+> **Note:** Azure Container Apps *does not* support mounting Azure Blob Storage or Azure NetApp Files directly as volumes. For persistent storage, only Azure Files shares (via SMB or NFS protocols) are supported in ACA.
+
+### 9.1 Container File System — Ephemeral per-Container Storage
+
+Each container in ACA has its own isolated filesystem. **This is ephemeral, container-scoped storage.** Any files a container writes to its local filesystem **will be lost when that container instance stops or restarts**. Other containers (even in the same app) cannot see this data.
+
+- **Scope & Lifetime:** *Container-scoped ephemeral.* Data is local to one container and persists only for the life of that container instance. If the container crashes or is restarted (or the app is updated to a new revision causing a new container instance), all data in its file system is reset (a new container starts with a clean file system).
+- **Use Cases:** Suitable for **temporary files or caching** that don’t need to persist. For example, the container might download an input, process it, write results temporarily, and then send the results to a database or external storage before shutting down. It's safe to use the container’s filesystem for scratch space as long as you **persist final output elsewhere**.
+- **Real-World Example:** *Image Processing Service* – A container receives an image, writes it to `/tmp` for processing, then uploads the processed image to blob storage. If the container restarts mid-process, the in-container file is lost (requiring the task to retry), but no permanent data is lost because the source image remains in external storage and the final output would be stored externally as well.
+
+**Demonstration – Ephemeral Data Loss on Container Restart:** Let's verify the transient nature of the container file system using Azure CLI. We will use our existing container app (from earlier steps) as the test subject:
+
+1. **Write a file inside the running container.** We can use `az containerapp exec` to run a command in our app’s container. The following command writes the text "Hello" to a file `/tmp/ephemeral.txt` inside the container, then lists the file to confirm it exists:
+
+  ```bash
+  az containerapp exec --name $APP_NAME --resource-group $RESOURCE_GROUP
+  ```
+
+  Once inside the container, manually run
+
+  ```bash
+  echo Hello > /tmp/ephemeral.txt && ls -l /tmp/ephemeral.txt
+
+  # exit to leave the exec session
+  exit
+  ```
+
+  This should output a directory listing showing `/tmp/ephemeral.txt` with a file size, indicating the file was created inside the container’s filesystem.
+
+2. **Restart the container (simulate the container instance being lost).** There isn't a direct “restart” button in ACA, but we can **force the container to stop** by scaling the app to zero replicas, then scale back up. Using the Azure CLI:
+
+  ```bash
+  # Scale down to 0 (stop all container instances)
+  az containerapp update --name $APP_NAME --resource-group $RESOURCE_GROUP --min-replicas 0
+
+  # Scale back up to 1 few seconds later (start a new container instance)
+  az containerapp update --name $APP_NAME --resource-group $RESOURCE_GROUP --min-replicas 1
+  ```
+
+  These commands will deallocate the container (removing its filesystem) and then create a fresh instance of the container app.
+
+3. **Check for the file after restart.** Now that a new container instance is running, let’s see if our file is still there:
+
+   ```bash
+   az containerapp exec --name $APP_NAME --resource-group $RESOURCE_GROUP
+   ```
+
+   Then run:
+
+    ```bash
+    ls -l /tmp/ephemeral.txt
+    # The file should not be found
+
+    # Exit the exec session
+    exit
+    ```
+
+   If the storage is truly ephemeral, we should **not** see the file this time. The command will likely show an error or no output for that file, confirming that `ephemeral.txt` no longer exists in the new container’s file system (the file was tied to the previous container instance and didn’t persist).
+
+We have just demonstrated that any data written to the container’s own file system is not durable. **When the container was restarted, the file disappeared.** This underscores that **container-scoped storage in ACA is transient.** Always copy important data to a persistent store if it needs to survive container restarts.
+
+> **Tip:** If your Container App has multiple containers (a multi-container deployment), each container still has its own isolated file system. One container cannot naturally see files written in another container’s filesystem. To share files between containers, you’d use a replica-scoped volume (next section).
+
+**Ephemeral Storage Capacity:** The total ephemeral storage available to a given Container App replica (including container filesystem and any replica-scoped volumes) depends on the replica’s CPU allocation. Higher CPU allocations grant more temporary storage up to a limit
+
+Keep this in mind if your app writes large temporary files: e.g. with a 0.5 vCPU app, you have up to ~2 GiB of space. Exceeding these limits might cause errors. Also note that this storage is shared across all containers in the replica and includes the container’s own filesystem usage.
+
+### 9.2 Replica-Scoped Temporary Storage — Shared Ephemeral Volume (EmptyDir)
+
+In addition to each container’s own storage, ACA allows an **ephemeral volume that is shared among all containers in the same replica**. This is analogous to Kubernetes **EmptyDir** volumes. In ACA, we call this *replica-scoped temporary storage*. It provides a way for multiple containers (within one app instance) to share data, and also to preserve data across container restarts **as long as the replica itself continues to exist**.
+
+- **Scope & Lifetime:** *Replica-scoped ephemeral.* The volume is created when a replica starts and persists **until that entire replica is removed**. All containers in that replica can read/write the volume via a mounted path. If a container within the replica crashes and restarts on the same replica, it will still see the files previously written to the shared volume (since the replica and its volume are still alive). However, if the app scales down to 0 (destroying the replica) or a new revision is deployed (old replicas get replaced by new ones), the data in this volume is **lost** (because it doesn’t carry over to new replicas).
+- **Use Cases:** Ideal for **sharing data between sidecar containers or between init and main containers**. Common scenarios:
+  - A main app writes log files or data files to the shared volume; a sidecar container (in the same replica) picks them up for processing or shipping to an external store.
+  - An init container downloads or generates a file that the main application container then reads on startup. Using an EmptyDir means the file persists for the main container’s use.
+  - Providing a small scratch space for a group of containers working together in a replica.
+- **Real-World Example:** *Logging Sidecar* – Imagine a web application container that writes logs to `/sharedlogs` (mounted EmptyDir). A sidecar container in the same pod monitors `/sharedlogs` and uploads the logs to an external service. If the web app crashes and restarts on the same replica, it can continue appending to the existing log file. If we deploy a new version of the app (causing new replicas), the old replica (and its logs) will be discarded once traffic shifts, but ideally the sidecar would have sent those logs out by then.
+
+**Configuring a Replica-Scoped Volume:** Currently, the Azure CLI does not have a single command to directly add an EmptyDir volume and mount it via parameters. We typically configure this by **updating the Container App’s YAML** definition:
+
+- Define a volume in the Container App template with `storageType: EmptyDir`, giving it a name (e.g. `sharedvol`).
+- In each container that should use it, add a `volumeMount` referencing that volume name and a mount path (e.g. mount `sharedvol` at `/mnt/shared`).
+- Then update the container app with this new configuration.
+
+For example, to add a replica-scoped volume to an existing app via CLI:
+
+   1. **Export the current app configuration to YAML:**  
+
+      ```bash
+      az containerapp show -n $APP_NAME -g $RESOURCE_GROUP -o yaml > app.yaml
+      ```
+
+   2. **Edit the YAML** to add an EmptyDir volume and mount it. For instance, under `template:`, add:
+
+      ```yaml
+      volumes:
+        - name: sharedvol
+          storageType: EmptyDir
+      containers:
+        - name: my-container-app
+          # ... (image and other settings)
+          volumeMounts:
+            - volumeName: sharedvol
+              mountPath: /mnt/shared
+
+        # Add a sidecar container that uses the same volume
+        # Copy the container definition above and edit the container name in order to simulate a sidecar container
+        - image: myacrlab7083.azurecr.io/mycontainerapp:v2
+          imageType: ContainerImage
+          name: my-container-app-sidecar # edit the name
+          resources:
+            cpu: 0.5
+            ephemeralStorage: 2Gi
+            memory: 1Gi
+          volumeMounts:
+            - volumeName: sharedvol
+              mountPath: /mnt/shared
+          # Ensure to add this command in order to prevent the sidecar from exiting immediately due to port conflicts
+          command: 
+            - sleep
+            - infinity
+        
+      ```
+
+   3. **Apply the updated configuration:**  
+
+      ```bash
+      az containerapp update -n $APP_NAME -g $RESOURCE_GROUP --yaml app.yaml
+      ```
+
+      The Container App will roll out a new revision with the EmptyDir volume in place.
+
+   4. **Verify the volume is mounted:** You can exec into the containers and check:
+
+      Exec into the main container
+
+      ```bash
+      az containerapp exec --name $APP_NAME --resource-group $RESOURCE_GROUP --container my-container-app
+      ```
+
+      Then run:
+
+      ```bash
+      ls -l /mnt/shared # Should be empty initially
+      # Create a test file
+      touch /mnt/shared/testfile.txt && ls -l /mnt/shared
+      exit 
+      ```
+
+      Then exec into the sidecar container and check:
+
+      ```bash
+      az containerapp exec --name $APP_NAME --resource-group $RESOURCE_GROUP --container my-container-app-sidecar
+      ```
+
+      ```bash
+      # This should show the same file created in the main container
+      ls -l /mnt/shared
+      exit
+      ```
+
+      This example was fine for temporary usage but what if we want to persist our files ? Let's see how you can leverage Azure Files.
+
+### 9.3 Azure Files — Persistent Shared Storage Volume
+
+To **persist data beyond the life of a container or replica**, Azure Container Apps can mount an **Azure Files** share as a volume. Azure Files is a fully managed file share in Azure Storage (accessible via SMB or NFS protocols) that allows multiple instances to read/write files. In ACA, mounting an Azure Files share gives your containers a **durable volume**: files written there remain even if the app is restarted, scaled, or updated.
+
+- **Scope & Lifetime:** *External persistent storage.* The Azure Files share exists independently of any container app replicas. All active replicas of your app can mount the same share (using the same storage configuration), so the data is effectively shared across your whole app and persists until you explicitly delete it from the storage account. Even if your app is deleted, the files remain in the storage account (until that is deleted).
+- **Use Cases:** This is the go-to solution for any scenario where data produced by your app needs to be **retained or accessed later**. Examples:
+  - Persisting uploaded files (e.g., user data, images) that should be available for later retrieval or processing, even if the app instance that uploaded it goes away.
+  - Storing application state or configuration that should remain consistent across restarts (though for structured data consider using databases or other services).
+  - Sharing files across multiple replicas of your app (since all can mount the same Azure Files volume, a file written by one replica is visible to the others).
+  - Allowing other services or on-prem systems to access files produced by ACA (via the Azure Files API or SMB mounting).
+- **Real-World Example:** *Reporting Application* – Suppose containers in ACA generate PDF reports. Using Azure Files, each container can write its report to a shared file share. Those files can then be accessed later by other systems or users (via a secure SMB mount or via an API), and they remain available even if the generating container shuts down. Another example: an ACA-hosted app might accept user file uploads and store them on an Azure Files share, so that a backend job or external system can process or retrieve those files later.
+
+**Configuring an Azure Files Volume via Azure CLI:** Setting up an Azure Files share for ACA involves both Azure Storage and the Container App environment:
+
+1. **Create an Azure Storage Account and File Share** (if you don’t have one already). For example:
+
+   ```bash
+   # Create a storage account (storage names must be globally unique)
+   # Storage account name must be between 3 and 24 characters in length and use numbers and lower-case letters only.
+   STORAGE_ACCT="<your_storage_account_name>"
+   az storage account create -n $STORAGE_ACCT -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
+
+   # Create a file share in that storage account
+   FILESHARE_NAME="acashare"
+   az storage share-rm create --name $FILESHARE_NAME --storage-account $STORAGE_ACCT --resource-group $RESOURCE_GROUP
+   ```
+
+   Ensure the storage account’s region matches your Container Apps environment’s region for optimal performance.
+2. **Retrieve storage account keys:** We need the storage account key for ACA to access the file share (unless using Azure AD identity for auth). For simplicity, we’ll use the key:
+
+   ```bash
+   STORAGE_KEY=$(az storage account keys list -g $RESOURCE_GROUP -n $STORAGE_ACCT --query "[0].value" -o tsv)
+   ```
+
+   This stores the first key in the `STORAGE_KEY` variable.
+3. **Register the storage with your Container Apps environment:** Before a Container App can mount the file share, the share must be configured in the Container Apps **Environment** as a storage. Use Azure CLI:
+
+   ```bash
+   ENV_NAME="<your_containerapps_environment_name>"
+   STORAGE_NAME="mystorage"  # name to identify this storage in the environment
+
+   az containerapp env storage set --name $ENV_NAME --resource-group $RESOURCE_GROUP \
+       --storage-name $STORAGE_NAME --storage-type AzureFile \
+       --azure-file-account-name $STORAGE_ACCT --azure-file-account-key $STORAGE_KEY \
+       --azure-file-share-name $FILESHARE_NAME --access-mode ReadWrite
+   ```
+
+   This command tells the Container Apps environment about your Azure Files share, under the alias `mystorage`. We specify:
+   - `storage-type AzureFile` (for an Azure Files share).
+   - The storage account name and key, and the name of the file share.
+   - Access mode `ReadWrite` (containers can read and write; use `ReadOnly` if appropriate).
+4. **Mount the Azure Files share in your Container App:** Now attach this storage to the container app as a volume (requires an update to the app’s template):
+   - Export the app to YAML (as before with `az containerapp show -o yaml`).
+   - Under `template:volumes:`, add:
+
+     ```yaml
+     volumes:
+       - name: azurefilesvol
+         storageType: AzureFile
+         storageName: mystorage   # the name set in env storage
+     containers:
+       - name: <your-container-name>
+         image: <your-image>
+         volumeMounts:
+           - volumeName: azurefilesvol
+             mountPath: /data
+     ```
+
+     This defines a volume `azurefilesvol` backed by the Azure Files share (`mystorage` from the env) and mounts it into the container at `/data`.
+   - Apply the updated YAML:
+
+     ```bash
+     az containerapp update -n $APP_NAME -g $RESOURCE_GROUP --yaml app.yaml
+     ```
+
+     The app will redeploy with the Azure Files share mounted.
+
+**Demonstration – Verifying Persistent Storage Behavior:** With the Azure Files volume in place:
+
+1. **Write a file to the Azure Files mount from the app:**
+
+   ```bash
+   az containerapp exec --name $APP_NAME --resource-group $RESOURCE_GROUP
+   echo Persisted > /data/persistent.txt && ls -l /data/persistent.txt
+   exit
+   ```
+
+   This writes "Persisted" to `/data/persistent.txt` in the container. Because `/data` is on the Azure Files share, the file is actually stored persistently in Azure Storage.
+2. **Restart the container (new instance):** Again, scale down to 0 and up to 1 (or deploy a new revision) to simulate a new container instance:
+
+   ```bash
+   az containerapp update \
+    --name $APP_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --min-replicas 0
+   # wait, then
+   az containerapp update \
+    --name $APP_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --min-replicas 1
+   ```
+
+3. **Check for the file after restart:**
+
+   ```bash
+   az containerapp exec --name $APP_NAME --resource-group $RESOURCE_GROUP
+   ls -l /data/persistent.txt
+   ```
+
+   We expect to see `persistent.txt` still present. If we `cat /data/persistent.txt`, it should contain "Persisted". The file remained because it’s stored on the Azure Files share, not the container’s ephemeral disk.
+
+You can also verify outside the app: use Azure CLI or Storage Explorer to list files in the share and see `persistent.txt` there. Deleting the Container App would not remove this file; it lives in the external storage until you remove it.
+
+With Azure Files, we’ve added **durable storage** to our app. Data in `/data` will persist across restarts and scaling, and can be shared across all instances of the app.
+
+---
+
+**Summary of ACA Storage Options:**
+
+- Use **container filesystem** for ephemeral, single-container cache or scratch data. Don't rely on it for persistence.
+- Use **EmptyDir (replica temporary storage)** for ephemeral data sharing between containers in one replica, or to survive container restarts in-place. Good for sidecar patterns or init data, but data vanishes when the replica is gone.
+- Use **Azure Files** for any data that needs to persist beyond the life of a replica or be shared across the app/with external systems. This is your durable storage solution in ACA.
+
+Depending on your application’s needs, you might employ one or multiple of these. For instance, a complex app could use an EmptyDir for intermediate processing between containers, then store final results on Azure Files.
+
+## 10. Cleanup Resources (Optional)
 
 If you're done with the lab, you should clean up the Azure resources to avoid unnecessary costs:
 
