@@ -280,6 +280,10 @@ The creation might take a minute or two. If successful, it will output details o
 - **`fqdn`**: This is the fully qualified domain name of your container app (e.g., `my-container-app.<region>.azurecontainerapps.io`). This is the public URL for your app.
 - **`latestRevisionName`**: Name of the active revision (something like `my-container-app--abcde`).
 
+You should be able to see the app in the Azure Portal under the Container Apps service, listed in your resource group.
+
+![Azure Container Apps Deployment](assets/container_app.jpeg)
+
 ### 4.2 Verify the Deployment
 
 Once deployment is complete, retrieve the URL of your container app:
@@ -437,6 +441,9 @@ By default, existing traffic stays on the prior revision (which has 100%) and th
 
 Let's say we want to send 50% of traffic to the new version and keep 50% on the old version (to test v2 with half of the users).
 
+The following diagram shows a container app with two revisions.
+
+![Container App Revisions](assets/revisionpond.png)
 Use the ingress traffic splitting command:
 
 ```bash
@@ -459,6 +466,8 @@ az containerapp show -n $APP_NAME -g $RESOURCE_GROUP --query "properties.configu
 ```
 
 You should see the two revisions each with weight 50 in the JSON output.
+
+![Azure Container Apps Traffic Split](assets/trafficsplit.png)
 
 ### 7.5 Validate the Traffic Split (Optional)
 
@@ -603,6 +612,8 @@ In previous steps, we focused on deploying and managing stateless containers. By
 | **Replica temporary storage (EmptyDir)** | Ephemeral storage shared by **all containers in the same replica** (similar to Kubernetes *EmptyDir*). | Data persists for the lifetime of the **replica** (survives container restarts on that replica). **Lost when the replica is replaced or scaled to zero**. | Sharing files between containers in a replica – e.g. the main app container writes log files that a sidecar container reads and ships off. |
 | **Azure Files**             | **Durable storage** backed by an **Azure Files** share (external storage account). All replicas can mount it. | Data is persisted to a remote Azure file share, surviving app restarts, revisions, and scaling (accessible across replicas). | Storing user uploads or application data that must be retained and accessible outside the app (e.g. shared reports folder). |
 
+![Azure Container Apps Storage Options](assets/storage.png)
+
 > **Note:** Azure Container Apps *does not* support mounting Azure Blob Storage or Azure NetApp Files directly as volumes. For persistent storage, only Azure Files shares (via SMB or NFS protocols) are supported in ACA.
 
 ### 9.1 Container File System — Ephemeral per-Container Storage
@@ -735,6 +746,14 @@ For example, to add a replica-scoped volume to an existing app via CLI:
 
       The Container App will roll out a new revision with the EmptyDir volume in place.
 
+      In the left section, in `Application` > `Revisions and replicas`, on the latest replica if you click on `Show replicas`, you should see the new replica with the sidecar container running alongside the main app container.
+
+      <br/>
+
+      ![Container App Replica with Sidecar](assets/replica_with_sidecar.jpeg)
+
+      <br/>
+
    4. **Verify the volume is mounted:** You can exec into the containers and check:
 
       Exec into the main container
@@ -763,6 +782,14 @@ For example, to add a replica-scoped volume to an existing app via CLI:
       ls -l /mnt/shared
       exit
       ```
+
+      In the volume section, you should see your newly created ephemeral volume and the associated mount volume mounts.
+
+      <br/>
+
+      ![Container App Volume Mounts](assets/ephemeral_volume.jpeg)
+
+      <br/>
 
       This example was fine for temporary usage but what if we want to persist our files ? Let's see how you can leverage Azure Files.
 
