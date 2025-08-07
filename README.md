@@ -12,6 +12,7 @@ In this lab, you will **build, deploy, and explore an application using Azure Co
 - Configured advanced features:
   - **Ingress Traffic Splitting:** Gradually shift traffic between two versions of your app for blue-green deployments (canary releases).
   - **Network IP Restrictions:** Limit access to your app by client IP address ranges.
+  - **Data persistence** options in Azure Container Apps, including ephemeral storage, replica-scoped volumes, and durable Azure Files shares.
 Throughout the lab, we will use Azure CLI commands (with the Azure CLI extension for Container Apps) and guidance from official Microsoft Learn resources.
 
 > **Note:** All commands in this guide are shown for Bash (Linux/macOS) or PowerShell. Ensure you have the Azure CLI installed and updated, Docker running, and an active Azure subscription. Examples will use placeholder names—replace them with your own where appropriate (e.g., resource group name, registry name, etc.).
