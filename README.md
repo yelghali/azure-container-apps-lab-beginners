@@ -944,6 +944,7 @@ In this lab, you successfully:
 - Performed a blue-green deployment by leveraging multiple revisions and splitting traffic between an old and new version.
 - Implemented IP-based access restrictions to lock down the app to specific IP addresses.
 Azure Container Apps provides a powerful way to run containers with serverless ease: you don't manage any VMs or Kubernetes, and you get features like autoscaling, revisions, and integrated networking out of the box.
+- Explored data persistence options in Azure Container Apps, including ephemeral storage, replica-scoped volumes, and durable Azure Files shares.
 
 For further exploration:
 
