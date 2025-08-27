@@ -5,9 +5,13 @@ title: ACA beginners workshop              # Required. Full title of the worksho
 short_title: ACA beginners workshop     # Optional. Short title displayed in the header
 description: This is a workshop for getting started with Azure Container Apps. It builds on the simple labs to discover different aspects of ACA, requiring a simple environment setup.  # Required.
 level: beginner                         # Required. Can be 'beginner', 'intermediate' or 'advanced'
+
 authors:                                # Required. You can add as many authors as needed      
-  - [Abdoul-Hakim Afraitane](https://www.linkedin.com/in/abdoul-hakim-afraitane/)
-  - [Yassine El Ghali](https://www.linkedin.com/in/yelghali/)
+  - name: Abdoul-Hakim Afraitane
+    url: https://www.linkedin.com/in/abdoul-hakim-afraitane/
+  - name: Yassine El Ghali
+    url: https://www.linkedin.com/in/yelghali/
+
 #contacts:                               # Required. Must match the number of authors
 #  - [Abdoul-Hakim Afraitane](https://www.linkedin.com/in/abdoul-hakim-afraitane/)
 #  - [Yassine El Ghali](https://www.linkedin.com/in/yelghali/)
