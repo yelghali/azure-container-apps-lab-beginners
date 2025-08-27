@@ -11,6 +11,7 @@ authors:                                # Required. You can add as many authors 
 contacts:                               # Required. Must match the number of authors
   - [Abdoul-Hakim Afraitane](https://www.linkedin.com/in/abdoul-hakim-afraitane/)
   - [Yassine El Ghali](https://www.linkedin.com/in/yelghali/)
+    
 duration_minutes: 80                    # Required. Estimated duration in minutes
 tags: aca, api, container, beginner          # Required. Tags for filtering and searching
 #banner_url: assets/banner.jpg           # Optional. Should be a 1280x640px image
