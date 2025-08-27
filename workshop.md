@@ -5,16 +5,12 @@ title: ACA beginners workshop              # Required. Full title of the worksho
 short_title: ACA beginners workshop     # Optional. Short title displayed in the header
 description: This is a workshop for getting started with Azure Container Apps. It builds on the simple labs to discover different aspects of ACA, requiring a simple environment setup.  # Required.
 level: beginner                         # Required. Can be 'beginner', 'intermediate' or 'advanced'
-
 authors:                                # Required. You can add as many authors as needed      
-  - name: Abdoul-Hakim Afraitane
-    url: https://www.linkedin.com/in/abdoul-hakim-afraitane/
-  - name: Yassine El Ghali
-    url: https://www.linkedin.com/in/yelghali/
-
-#contacts:                               # Required. Must match the number of authors
-#  - [Abdoul-Hakim Afraitane](https://www.linkedin.com/in/abdoul-hakim-afraitane/)
-#  - [Yassine El Ghali](https://www.linkedin.com/in/yelghali/)
+  - Abdoul-Hakim Afraitane
+  - Yassine El Ghali
+contacts:                               # Required. Must match the number of 
+  - https://www.linkedin.com/in/abdoul-hakim-afraitane/
+  - https://www.linkedin.com/in/yelghali/
 duration_minutes: 80                    # Required. Estimated duration in minutes
 tags: aca, api, container, beginner          # Required. Tags for filtering and searching
 #banner_url: assets/banner.jpg           # Optional. Should be a 1280x640px image
@@ -30,9 +26,13 @@ tags: aca, api, container, beginner          # Required. Tags for filtering and 
 ---
 
 
-# Azure Container Apps Lab Guide
+# Azure Container Apps beginners Lab
 
-In this lab, you will **build, deploy, and explore an application using Azure Container Apps**. Azure Container Apps is a managed **serverless container platform** that abstracts away infrastructure management, allowing you to run containerized applications without worrying about Kubernetes or servers. Common scenarios for Container Apps include deploying web APIs, hosting background jobs, and running event-driven microservices, with built-in automatic scaling (including scale to zero) capabilities.
+In this lab, you will **build, deploy, and explore an application using Azure Container Apps**. 
+
+Azure Container Apps is a managed **serverless container platform** that abstracts away infrastructure management, allowing you to run containerized applications without worrying about Kubernetes or servers. 
+
+Common scenarios for Container Apps include deploying web APIs, hosting background jobs, and running event-driven microservices, with built-in automatic scaling (including scale to zero) capabilities.
 
 **Lab Overview:** By the end of this lab, you will have:
 
@@ -941,7 +941,7 @@ You can also verify outside the app: use Azure CLI or Storage Explorer to list f
 
 With Azure Files, we’ve added **durable storage** to our app. Data in `/data` will persist across restarts and scaling, and can be shared across all instances of the app.
 
----
+
 
 **Summary of ACA Storage Options:**
 
@@ -951,7 +951,34 @@ With Azure Files, we’ve added **durable storage** to our app. Data in `/data` 
 
 Depending on your application’s needs, you might employ one or multiple of these. For instance, a complex app could use an EmptyDir for intermediate processing between containers, then store final results on Azure Files.
 
-## 10. Cleanup Resources (Optional)
+
+---
+
+
+
+## 10. Easy Auth with ACA (optional)
+
+Azure Container Apps provides built-in authentication and authorization features (sometimes referred to as "Easy Auth"), to secure your external ingress-enabled container app with minimal or no code.
+
+For details surrounding authentication and authorization, refer to the following guides for your choice of provider.
+
+Microsoft Entra ID
+Facebook
+GitHub
+Google
+X
+Custom OpenID Connect
+
+You can learn more here : https://learn.microsoft.com/en-us/azure/container-apps/authentication
+
+Setting up an authentication example would require admin RBAC rights to configure App registrations (optional for this lab).
+
+You can learn how to setup an example here : https://github.com/Azure-Samples/containerapps-builtinauth-bicep
+
+
+---
+
+## 11. Cleanup Resources (Optional)
 
 If you're done with the lab, you should clean up the Azure resources to avoid unnecessary costs:
 
