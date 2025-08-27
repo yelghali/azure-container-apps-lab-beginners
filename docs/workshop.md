@@ -962,12 +962,12 @@ Azure Container Apps provides built-in authentication and authorization features
 
 For details surrounding authentication and authorization, refer to the following guides for your choice of provider.
 
-Microsoft Entra ID
-Facebook
-GitHub
-Google
-X
-Custom OpenID Connect
+ - Microsoft Entra ID
+ - Facebook
+ - GitHub
+ - Google
+ - X
+ - Custom OpenID Connect
 
 You can learn more here : https://learn.microsoft.com/en-us/azure/container-apps/authentication
 
