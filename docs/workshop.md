@@ -951,6 +951,20 @@ With Azure Files, we’ve added **durable storage** to our app. Data in `/data` 
 
 Depending on your application’s needs, you might employ one or multiple of these. For instance, a complex app could use an EmptyDir for intermediate processing between containers, then store final results on Azure Files.
 
+## 11. Cleanup Resources (Optional)
+
+If you're done with the lab, you should clean up the Azure resources to avoid unnecessary costs:
+
+```bash
+az group delete --name $RESOURCE_GROUP --no-wait --yes
+```
+
+This will delete the resource group and **all** resources inside it (Container Apps, ACR, etc.). The `--no-wait` will start the deletion without waiting for it to complete, and `--yes` skips the confirmation prompt.
+
+Be careful with this step and ensure you specify the correct resource group name. Once deleted, the resources cannot be recovered.
+
+If you plan to reuse the resources or continue experimenting later, you can skip deletion and keep them, but remember that running container apps and storage (ACR) may incur charges over time.
+
 
 ---
 
@@ -978,19 +992,6 @@ You can learn how to setup an example here : https://github.com/Azure-Samples/co
 
 ---
 
-## 11. Cleanup Resources (Optional)
-
-If you're done with the lab, you should clean up the Azure resources to avoid unnecessary costs:
-
-```bash
-az group delete --name $RESOURCE_GROUP --no-wait --yes
-```
-
-This will delete the resource group and **all** resources inside it (Container Apps, ACR, etc.). The `--no-wait` will start the deletion without waiting for it to complete, and `--yes` skips the confirmation prompt.
-
-Be careful with this step and ensure you specify the correct resource group name. Once deleted, the resources cannot be recovered.
-
-If you plan to reuse the resources or continue experimenting later, you can skip deletion and keep them, but remember that running container apps and storage (ACR) may incur charges over time.
 
 ## Conclusion
 
