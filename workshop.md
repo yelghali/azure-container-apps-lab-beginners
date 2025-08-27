@@ -1,3 +1,31 @@
+---
+published: true                        # Optional. Set to true to publish the workshop (default: false)
+type: workshop                          # Required.
+title: ACA beginners workshop              # Required. Full title of the workshop
+short_title: ACA beginners workshop     # Optional. Short title displayed in the header
+description: This is a workshop for getting started with Azure Container Apps. It builds on the simple labs to discover different aspects of ACA, requiring a simple environment setup.  # Required.
+level: beginner                         # Required. Can be 'beginner', 'intermediate' or 'advanced'
+authors:                                # Required. You can add as many authors as needed      
+  - Abdoul-Hakim Afraitane
+  - Yassine El Ghali
+contacts:                               # Required. Must match the number of authors
+  - [Abdoul-Hakim Afraitane](https://www.linkedin.com/in/abdoul-hakim-afraitane/)
+  - [Yassine El Ghali](https://www.linkedin.com/in/yelghali/)
+duration_minutes: 80                    # Required. Estimated duration in minutes
+tags: aca, api, container, beginner          # Required. Tags for filtering and searching
+#banner_url: assets/banner.jpg           # Optional. Should be a 1280x640px image
+#video_url: https://youtube.com/link     # Optional. Link to a video of the workshop
+#audience: students, devs                      # Optional. Audience of the workshop (students, pro devs, etc.)
+#wt_id: <cxa_tracking_id>                # Optional. Set advocacy tracking code for supported links
+#oc_id: <marketing_tracking_id>          # Optional. Set marketing tracking code for supported links
+#navigation_levels: 2                    # Optional. Number of levels displayed in the side menu (default: 2)
+#navigation_numbering: true             # Optional. Enable numbering in the side menu (default: true)
+#sections_title:                         # Optional. Override titles for each section to be displayed in the side bar
+#   - Section 1 title
+#   - Section 2 title
+---
+
+
 # Azure Container Apps Lab Guide
 
 In this lab, you will **build, deploy, and explore an application using Azure Container Apps**. Azure Container Apps is a managed **serverless container platform** that abstracts away infrastructure management, allowing you to run containerized applications without worrying about Kubernetes or servers. Common scenarios for Container Apps include deploying web APIs, hosting background jobs, and running event-driven microservices, with built-in automatic scaling (including scale to zero) capabilities.
