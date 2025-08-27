@@ -951,7 +951,7 @@ With Azure Files, we’ve added **durable storage** to our app. Data in `/data` 
 
 Depending on your application’s needs, you might employ one or multiple of these. For instance, a complex app could use an EmptyDir for intermediate processing between containers, then store final results on Azure Files.
 
-## 11. Cleanup Resources (Optional)
+## 10. Cleanup Resources (Optional)
 
 If you're done with the lab, you should clean up the Azure resources to avoid unnecessary costs:
 
@@ -970,7 +970,7 @@ If you plan to reuse the resources or continue experimenting later, you can skip
 
 
 
-## 10. Easy Auth with ACA (optional)
+## 11. Easy Auth with ACA (optional)
 
 Azure Container Apps provides built-in authentication and authorization features (sometimes referred to as "Easy Auth"), to secure your external ingress-enabled container app with minimal or no code.
 
